@@ -1,0 +1,14 @@
+# Make sure all mounts from Docker for Mac > Preferences > File Sharing are removed
+
+# File format (1 entry per line)
+#  <local dir>:<remote dir>
+#  <local dir>
+#
+# Absolute and relative paths should work
+#  
+# examples:
+
+.:/mnt/current-proj
+../other-dir:/mnt/other
+/Users/kbentrup/Documents
+/tmp:/tmp/mac
