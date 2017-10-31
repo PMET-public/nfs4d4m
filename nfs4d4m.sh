@@ -104,8 +104,10 @@ docker exec d4m-helper nsenter -t 1 -m sh -c "echo -e '${fstab}' > /etc/fstab"
 
 # ensure remote dirs exist
 for remote_dir in $(awk -F ':' '{print $2}' .tmp/mounts); do
-  docker exec d4m-helper nsenter -t 1 -m sh -c "umount -f '${remote_dir}'; mkdir -p '${remote_dir}'"
+  docker exec d4m-helper nsenter -t 1 -m sh -c "umount -f '${remote_dir}' 2>/dev/null; mkdir -p '${remote_dir}'"
 done
 
 # mount the nfs volumes on d4m vm
 docker exec d4m-helper nsenter -t 1 -m mount -a
+
+echo "Done."
