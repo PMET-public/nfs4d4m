@@ -5,19 +5,18 @@
 # turn on debugging
 #set -x
 
-# check if necessary nfs conf line exists 
-# https://superuser.com/questions/183588/nfs-share-from-os-x-snow-leopard-to-ubuntu-linux
-nfs_conf_line="nfs.server.mount.require_resv_port = 0"
-if ! grep -q "${nfs_conf_line}" /etc/nfs.conf; then
-  echo "${nfs_conf_line}" >> /etc/nfs.conf
+
+if [ ! -f "$1" ]; then
+   echo "$1 is not a regular file" && exit 1
 fi
+mount_file="$1"
 
 # create tmp dir for file manipulation
 mkdir -p .tmp || :
 
 # clean up and standardize mounts file format
 # remove leading and trailing whitespace, extra slashes, empty and duplicate lines
-while read line; do echo -e "$line"; done < mounts | 
+while read line; do echo -e "$line"; done < "${mount_file}" | 
   sed '/#.*/d;s/\/*$//;s/\/*:/:/;/^$/d' |
   awk -F ':' '{print $1 ":" (($2=="") ? $1 : $2)}' |
   sort | uniq > .tmp/mounts
@@ -62,6 +61,13 @@ echo -e "# d4m${exports}\n# d4m" >> /etc/exports
 
 if ! nfsd checkexports; then
   echo "The command 'nfsd checkexports' failed. Check /etc/exports." && exit 1
+fi
+
+# check if necessary nfs conf line exists 
+# https://superuser.com/questions/183588/nfs-share-from-os-x-snow-leopard-to-ubuntu-linux
+nfs_conf_line="nfs.server.mount.require_resv_port = 0"
+if ! grep -q "${nfs_conf_line}" /etc/nfs.conf; then
+  echo "${nfs_conf_line}" >> /etc/nfs.conf
 fi
 
 # restart nfsd
