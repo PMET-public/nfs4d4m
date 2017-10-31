@@ -15,35 +15,40 @@ mount_file="$1"
 mkdir -p .tmp || :
 
 # clean up and standardize mounts file format
-# remove leading and trailing whitespace, extra slashes, empty and duplicate lines
+# remove leading & trailing whitespace, extra "/"s, empty & duplicate lines, append ':' to lines with only a local path
 while read line; do echo -e "$line"; done < "${mount_file}" | 
-  sed '/#.*/d;s/\/*$//;s/\/*:/:/;/^$/d' |
-  awk -F ':' '{print $1 ":" (($2=="") ? $1 : $2)}' |
+  sed '/#.*/d;s/\/*$//;s/\/*:/:/;/^$/d;/:/!s/$/:/' |
   sort | uniq > .tmp/mounts
 
-# check local dirs and update .tmp/mounts to explicit paths
-prev_dir="INITIAL_VALUE_OF_FAKE_DIR"
+# check local paths exist and update local paths to explicit paths
 line_num=0
-for local_dir in $(sed 's/:.*//' .tmp/mounts | sort); do
+for local_path in $(sed 's/:.*//' .tmp/mounts | sort); do
   ((line_num++))
-  if ! $(cd "${local_dir}"); then
-    echo "Error: '${local_dir}' does not exist;" && exit 1
+  if ! $(cd "${local_path}"); then
+    echo "Error: '${local_path}' does not exist;" && exit 1
   fi
-  resolved_local_dir=$( cd "${local_dir}"; pwd -P )
-  if [ "${resolved_local_dir}" == "${prev_dir}" ] || [[ "${resolved_local_dir}" =~ "${prev_dir}/" ]]; then
-    echo "You can't export both '${prev_dir}' and '${resolved_local_dir}'" && exit 1
+  resolved_local_path=$( cd "${local_path}"; pwd -P )
+  sed -i.bak "${line_num}s|.*:|${resolved_local_path}:|" .tmp/mounts
+done
+
+# if remote path omitted; use same path remotely
+awk -F ':' '{print $1 ":" (($2=="") ? $1 : $2)}' .tmp/mounts > .tmp/awk && mv .tmp/awk .tmp/mounts
+
+prev_path="this-is-a-fake-path"
+for local_path in $(sed 's/:.*//' .tmp/mounts | sort); do
+  if [ "${local_path}" == "${prev_path}" ] || [[ "${local_path}" =~ "${prev_path}/" ]]; then
+    echo -e "You can't export both\n'${prev_path}'\nand its child:\n'${local_path}'" && exit 1
   fi
-  prev_dir="${resolved_local_dir}"
-  sed -i.bak "${line_num}s|.*:|${resolved_local_dir}:|" .tmp/mounts
+  prev_path="${local_path}"
 done
 
 # check remote mounts for duplication
-prev_dir="INITIAL_VALUE_OF_FAKE_DIR"
-for remote_dir in $(sed 's/.*://' .tmp/mounts | sort); do
-  if [ "${remote_dir}" == "${prev_dir}" ] || [[ "${resolved_local_dir}" =~ "${prev_dir}/" ]]; then
-    echo "You can't remotely mount to both '${prev_dir}' and '${remote_dir}'" && exit 1
+prev_path="this-is-a-fake-path"
+for remote_path in $(sed 's/.*://' .tmp/mounts | sort); do
+  if [ "${remote_path}" == "${prev_path}" ] || [[ "${resolved_local_path}" =~ "${prev_path}/" ]]; then
+    echo "You can't remotely mount to both '${prev_path}' and '${remote_path}'" && exit 1
   fi
-  prev_dir="${remote_dir}"
+  prev_path="${remote_path}"
 done
 
 # remove old d4m entries from local /etc/exports
@@ -53,9 +58,9 @@ perl -i -pe 'BEGIN{undef $/;} s/# d4m.*# d4m\n?//sm' /etc/exports
 logname=$(logname)
 nfs_uid=$(id -u "${logname}")
 nfs_gid=$(id -g "${logname}")
-for local_dir in $(sed 's/:.*//' .tmp/mounts); do
-    local_dir=$( cd "${local_dir}"; pwd -P )
-    exports="${exports}\n${local_dir} -alldirs -mapall=${nfs_uid}:${nfs_gid} localhost"
+for local_path in $(sed 's/:.*//' .tmp/mounts); do
+    local_path=$( cd "${local_path}"; pwd -P )
+    exports="${exports}\n${local_path} -alldirs -mapall=${nfs_uid}:${nfs_gid} localhost"
 done
 echo -e "# d4m${exports}\n# d4m" >> /etc/exports
 
@@ -86,28 +91,31 @@ if ! docker ps -a --format "{{.Names}}" | grep -q d4m-helper; then
 fi
 
 # install nfs utils on d4m vm
-docker exec d4m-helper nsenter -t 1 -m sh -c "apk update; apk add nfs-utils"
+docker exec d4m-helper nsenter -t 1 -m -u -n -i sh -c "apk update; apk add nfs-utils"
 
 # get d4m vm's current fstab
-docker exec d4m-helper nsenter -t 1 -m sh -c "cat /etc/fstab" > .tmp/d4m_fstab
+docker exec d4m-helper nsenter -t 1 -m -u -n -i sh -c "cat /etc/fstab" > .tmp/d4m_fstab
 
 # remove any old d4m entries
 perl -i -pe 'BEGIN{undef $/;} s/# d4m.*# d4m\n?//sm' .tmp/d4m_fstab
 
 # add new d4m entries
-d4m_vm_default_gateway=$(docker exec d4m-helper nsenter -t 1 -m -n sh -c "ip route|awk '/default/{print \$3}'")
+d4m_vm_default_gateway=$(docker exec d4m-helper nsenter -t 1 -m -u -n -i sh -c "ip route|awk '/default/{print \$3}'")
 fstab=$(sed "s/:/ /;s/^/${d4m_vm_default_gateway}:/;s/\$/ nfs nolock,local_lock=all 0 0/" .tmp/mounts)
 fstab="$(cat .tmp/d4m_fstab)\n# d4m\n${fstab}\n# d4m"
 
 # replace d4m vm's current fstab
-docker exec d4m-helper nsenter -t 1 -m sh -c "echo -e '${fstab}' > /etc/fstab"
+docker exec d4m-helper nsenter -t 1 -m -u -n -i sh -c "echo -e '${fstab}' > /etc/fstab"
 
 # ensure remote dirs exist
-for remote_dir in $(awk -F ':' '{print $2}' .tmp/mounts); do
-  docker exec d4m-helper nsenter -t 1 -m sh -c "umount -f '${remote_dir}' 2>/dev/null; mkdir -p '${remote_dir}'"
+for remote_path in $(awk -F ':' '{print $2}' .tmp/mounts); do
+  docker exec d4m-helper nsenter -t 1 -m -u -n -i sh -c "umount -f '${remote_path}' 2>/dev/null; mkdir -p '${remote_path}'"
 done
 
 # mount the nfs volumes on d4m vm
-docker exec d4m-helper nsenter -t 1 -m mount -a
+docker exec d4m-helper nsenter -t 1 -m -u -n -i mount -a
+
+# remove the helper container
+docker rm -fv d4m-helper
 
 echo "Done."
