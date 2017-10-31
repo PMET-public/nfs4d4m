@@ -4,13 +4,16 @@
 # If <remote path> is not specified, the script will use the resolved local path as the remote path.
 # Comments are NOT allowed on the same line as a path mapping.
 #
-# examples:
+# simple example to map parent path to an identical remote path
+
+..
+
+# other examples:
 #   <local path>:<remote path>
 #   <local path>
 #  
 
-
 .:/mnt/current-proj
 ../other-dir:/mnt/other
-/Users/kbentrup/Documents
+/Users/youruser/Documents
 /tmp:/tmp/mac
