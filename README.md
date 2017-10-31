@@ -1,7 +1,7 @@
 
 # Quickstart
 1. Remove all mounts from Docker for Mac > Preferences > File Sharing
-2. Create a mounts file (see mounts.example for file format)
+2. Create a mounts file. See mounts.example for file format but a simple example is just '..' which would share the parent path to the remote vm using the same path.
 3. Run `sudo ./nfs4d4m.sh mounts`
 
 If you make changes to your mounts file, just rerun the script and specify your new mounts file.
