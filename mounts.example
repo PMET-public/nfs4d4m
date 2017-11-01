@@ -2,7 +2,6 @@
 # Only 1 path mapping per line 
 # Absolute and relative paths are allowed. 
 # If <remote path> is not specified, the script will use the resolved local path as the remote path.
-# Comments are NOT allowed on the same line as a path mapping.
 #
 # simple example to map parent path to an identical remote path
 
