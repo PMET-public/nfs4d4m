@@ -98,12 +98,17 @@ docker exec d4m-helper nsenter -t 1 -m -u -n -i sh -c "apk update; apk add nfs-u
 # get d4m vm's current fstab
 docker exec d4m-helper nsenter -t 1 -m -u -n -i sh -c "cat /etc/fstab" > .tmp/d4m_fstab
 
-# remove any old d4m entries
+# unmount old d4m entries
+for remote_path in $(sed -n '/# d4m/,/# d4m/ p' .tmp/d4m_fstab | sed '/# d4m/d' | awk '{print $2}'); do
+  docker exec d4m-helper nsenter -t 1 -m -u -n -i sh -c "umount -f '${remote_path}' 2>/dev/null"
+done
+
+# remove old d4m entries from fstab
 perl -i -pe 'BEGIN{undef $/;} s/# d4m.*# d4m\n?//sm' .tmp/d4m_fstab
 
 # add new d4m entries
 d4m_vm_default_gateway=$(docker exec d4m-helper nsenter -t 1 -m -u -n -i sh -c "ip route|awk '/default/{print \$3}'")
-fstab=$(sed "s/:/ /;s/^/${d4m_vm_default_gateway}:/;s/\$/ nfs nolock,local_lock=all 0 0/" .tmp/mounts)
+fstab=$(sed "s/:/ /;s/^/${d4m_vm_default_gateway}:/;s/\$/ nfs nolock,tcp,noatime,nodiratime,relatime 0 0/" .tmp/mounts)
 fstab="$(cat .tmp/d4m_fstab)\n# d4m\n${fstab}\n# d4m"
 
 # replace d4m vm's current fstab
@@ -111,7 +116,7 @@ docker exec d4m-helper nsenter -t 1 -m -u -n -i sh -c "echo -e '${fstab}' > /etc
 
 # ensure remote dirs exist
 for remote_path in $(awk -F ':' '{print $2}' .tmp/mounts); do
-  docker exec d4m-helper nsenter -t 1 -m -u -n -i sh -c "umount -f '${remote_path}' 2>/dev/null; mkdir -p '${remote_path}'"
+  docker exec d4m-helper nsenter -t 1 -m -u -n -i sh -c "mkdir -p '${remote_path}'"
 done
 
 # mount the nfs volumes on d4m vm
