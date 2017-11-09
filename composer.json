@@ -1,11 +1,11 @@
 {
-    "name": "kbentrup/nfs4d4m",
+    "name": "magentoese/nfs4d4m",
     "description": "Faster file sharing for Docker for Mac using NFS",
     "type": "library",
     "authors": [
         {
             "name": "Keith Bentrup",
-            "email": "keithbentrup@gmail.com"
+            "email": "kbentrup@magento.com"
         }
     ],
     "require": {}
