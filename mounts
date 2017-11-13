@@ -6,7 +6,7 @@
 # simple example to map parent path to an identical remote path
 
 ~/
-
+/etc/letsencrypt
 # other examples:
 # <local path>:<remote path>
 # <local path>
