@@ -34,9 +34,12 @@ for local_path in $(sed 's/:.*//' .tmp/mounts | sort); do
 done
 
 # if remote path omitted; use same path remotely
+# unless path begins with osx /private, remove that
 # also remove any duplicates resulting from transformations
-awk -F ':' '{print $1 ":" (($2=="") ? $1 : $2)}' .tmp/mounts | sort | uniq > .tmp/awk && mv .tmp/awk .tmp/mounts
+awk -F ':' '{print $1 ":" (($2=="") ? (sub(/^\/private/, "", $1) ? $1 : $1) : $2)}' .tmp/mounts | sort | uniq > .tmp/awk
+mv .tmp/awk .tmp/mounts
 
+# check no mount is a child of another
 prev_path="this-is-a-fake-path"
 for local_path in $(sed 's/:.*//' .tmp/mounts | sort); do
   if [ "${local_path}" == "${prev_path}" ] || [[ "${local_path}" =~ "${prev_path}/" ]]; then
@@ -45,7 +48,7 @@ for local_path in $(sed 's/:.*//' .tmp/mounts | sort); do
   prev_path="${local_path}"
 done
 
-# check remote mounts for duplication
+# verify that remote mounts for duplication
 prev_path="this-is-a-fake-path"
 for remote_path in $(sed 's/.*://' .tmp/mounts | sort); do
   if [ "${remote_path}" == "${prev_path}" ] || [[ "${resolved_local_path}" =~ "${prev_path}/" ]]; then
