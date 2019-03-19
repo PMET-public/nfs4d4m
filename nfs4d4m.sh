@@ -8,7 +8,7 @@
 local_username=$(logname)
 
 if [ ! -f "$1" ]; then
-   echo "$1 is not a regular file" && exit 1
+  echo "$1 is not a regular file" && exit 1
 fi
 mount_file="$1"
 
@@ -87,45 +87,5 @@ killall -9 nfsd; nfsd start
 while ! rpcinfo -u localhost nfs > /dev/null 2>&1; do
   echo -n "." && sleep 1
 done
-
-# create a privileged container to execute cmds directly on the d4m vm
-if ! docker ps -a --format "{{.Names}}" | grep -q d4m-helper; then
-  if ! docker run --name d4m-helper -dt --privileged --pid=host debian:stable-slim bash; then
-    exit 1
-  fi
-fi
-
-# install nfs utils on d4m vm
-docker exec d4m-helper nsenter -t 1 -m -u -n -i sh -c "apk update; apk add nfs-utils"
-
-# get d4m vm's current fstab
-docker exec d4m-helper nsenter -t 1 -m -u -n -i sh -c "cat /etc/fstab" > .tmp/d4m_fstab
-
-# unmount old d4m entries
-for remote_path in $(sed -n '/# d4m/,/# d4m/ p' .tmp/d4m_fstab | sed '/# d4m/d' | awk '{print $2}'); do
-  docker exec d4m-helper nsenter -t 1 -m -u -n -i sh -c "umount -f '${remote_path}' 2>/dev/null"
-done
-
-# remove old d4m entries from fstab
-perl -i -pe 'BEGIN{undef $/;} s/# d4m.*# d4m\n?//sm' .tmp/d4m_fstab
-
-# add new d4m entries
-d4m_vm_default_gateway=$(docker exec d4m-helper nsenter -t 1 -m -u -n -i sh -c "ip route|awk '/default/{print \$3}'")
-fstab=$(sed "s/:/ /;s/^/${d4m_vm_default_gateway}:/;s/\$/ nfs nolock,tcp,noatime,nodiratime,relatime 0 0/" .tmp/mounts)
-fstab="$(cat .tmp/d4m_fstab)\n# d4m\n${fstab}\n# d4m"
-
-# replace d4m vm's current fstab
-docker exec d4m-helper nsenter -t 1 -m -u -n -i sh -c "echo -e '${fstab}' > /etc/fstab"
-
-# ensure remote dirs exist
-for remote_path in $(awk -F ':' '{print $2}' .tmp/mounts); do
-  docker exec d4m-helper nsenter -t 1 -m -u -n -i sh -c "mkdir -p '${remote_path}'"
-done
-
-# mount the nfs volumes on d4m vm
-docker exec d4m-helper nsenter -t 1 -m -u -n -i mount -a
-
-# remove the helper container
-docker rm -fv d4m-helper
 
 echo "Done."
