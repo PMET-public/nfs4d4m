@@ -58,7 +58,7 @@ for remote_path in $(sed 's/.*://' .tmp/mounts | sort); do
 done
 
 # remove old d4m entries from local /etc/exports
-perl -i -pe 'BEGIN{undef $/;} s/# d4m.*# d4m\n?//sm' /etc/exports
+sudo perl -i -pe 'BEGIN{undef $/;} s/# d4m.*# d4m\n?//sm' /etc/exports
 
 # add new d4m exports
 nfs_uid=$(id -u "${local_username}")
@@ -67,7 +67,7 @@ for local_path in $(sed 's/:.*//' .tmp/mounts); do
     local_path=$( cd "${local_path}"; pwd -P )
     exports="${exports}\n${local_path} -alldirs -mapall=${nfs_uid}:${nfs_gid} localhost"
 done
-echo -e "# d4m${exports}\n# d4m" >> /etc/exports
+echo -e "# d4m${exports}\n# d4m" | sudo tee -a /etc/exports
 
 if ! nfsd checkexports; then
   echo "The command 'nfsd checkexports' failed. Check /etc/exports." && exit 1
@@ -81,7 +81,7 @@ if ! grep -q "${nfs_conf_line}" /etc/nfs.conf; then
 fi
 
 # restart nfsd
-killall -9 nfsd; nfsd start
+killall -9 nfsd; sudo nfsd start
 
 # wait until nfs is up
 while ! rpcinfo -u localhost nfs > /dev/null 2>&1; do
